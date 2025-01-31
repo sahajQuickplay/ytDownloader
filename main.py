@@ -46,8 +46,9 @@ def get_available_formats(url: str) -> List[Dict]:
 def download_video(url: str, format_choice: Dict, destination: str):
     """Download the video with the selected format."""
     ydl_opts = {
-        'format': f"bestvideo[height<={format_choice['resolution'][:-1]}][vcodec^=avc]+bestaudio/best[height<={format_choice['resolution'][:-1]}]",
+        'format': f'bv*[height<={format_choice["resolution"][:-1]}][vcodec^=avc1][ext=mp4]+ba[ext=m4a]/b[height<={format_choice["resolution"][:-1]}][ext=mp4]',
         'merge_output_format': 'mp4',
+        'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac'],
         'outtmpl': os.path.join(destination, '%(title)s.%(ext)s'),
         'quiet': False,
         'no_warnings': True,
