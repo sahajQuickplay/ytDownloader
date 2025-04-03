@@ -5,10 +5,10 @@ from typing import List, Dict
 from pathlib import Path
 
 def get_available_formats(url: str) -> List[Dict]:
-    """Get available formats for the given YouTube URL."""
+    """Get available resolutions for MP4 video with audio merging."""
     ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
+        'quiet': False,
+        'no_warnings': False,
     }
     
     try:
@@ -16,26 +16,18 @@ def get_available_formats(url: str) -> List[Dict]:
             info = ydl.extract_info(url, download=False)
             formats = []
             
-            # Filter for formats that have both video and audio, or are suitable for merging
+            # Collect resolutions from video formats
             for f in info['formats']:
-                # Check if format has video
-                if f.get('height'):
+                if f.get('height') and f.get('ext') == 'mp4':  # MP4 video formats
                     resolution = f"{f['height']}p"
-                    # Create a unique format identifier
-                    format_id = f['format_id']
-                    vcodec = f.get('vcodec', 'N/A')
-                    acodec = f.get('acodec', 'N/A')
-                    
-                    # Only add formats that are either complete (have audio) or can be merged
-                    if acodec != 'none' or (vcodec != 'none' and vcodec != 'N/A'):
-                        formats.append({
-                            'resolution': resolution,
-                            'format_id': format_id,
-                            'vcodec': vcodec,
-                            'acodec': acodec
-                        })
+                    formats.append({
+                        'resolution': resolution,
+                        'format_id': f['format_id'],
+                        'vcodec': f.get('vcodec', 'N/A'),
+                        'acodec': f.get('acodec', 'N/A')
+                    })
             
-            # Remove duplicates based on resolution
+            # Remove duplicates and sort by resolution
             unique_formats = {f['resolution']: f for f in formats}.values()
             return sorted(unique_formats, key=lambda x: int(x['resolution'][:-1]), reverse=True)
     
@@ -44,14 +36,13 @@ def get_available_formats(url: str) -> List[Dict]:
         return []
 
 def download_video(url: str, format_choice: Dict, destination: str):
-    """Download the video with the selected format."""
+    """Download the video in MP4 with audio."""
     ydl_opts = {
-        'format': f'bv*[height<={format_choice["resolution"][:-1]}][vcodec^=avc1][ext=mp4]+ba[ext=m4a]/b[height<={format_choice["resolution"][:-1]}][ext=mp4]',
-        'merge_output_format': 'mp4',
-        'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac'],
+        'format': f"bestvideo[height<={format_choice['resolution'][:-1]}]+bestaudio/best[height<={format_choice['resolution'][:-1]}]",
+        'merge_output_format': 'mp4',  # Force MP4 output
         'outtmpl': os.path.join(destination, '%(title)s.%(ext)s'),
         'quiet': False,
-        'no_warnings': True,
+        'no_warnings': False,
     }
     
     try:
@@ -76,10 +67,10 @@ def main():
             print("No suitable formats found or invalid URL.")
             return
         
-        # Create format choices for the dropdown
-        choices = [f"{f['resolution']} (codec: {f['vcodec']})" for f in formats]
+        # Create format choices for dropdown
+        choices = [f"{f['resolution']} (vcodec: {f['vcodec']}, acodec: {f['acodec']})" for f in formats]
         
-        # Create the resolution selection dropdown
+        # Resolution selection
         questions = [
             inquirer.List('resolution',
                          message="Select preferred resolution",
@@ -98,12 +89,11 @@ def main():
         # Get destination directory
         print("\nDefault download location is current directory.")
         custom_dest = input("Enter custom download path (or press Enter for default): ").strip()
-        
         destination = custom_dest if custom_dest else os.getcwd()
         
-        # Verify destination exists
+        # Verify destination
         if not os.path.exists(destination):
-            create = input(f"\nDirectory {destination} doesn't exist. Create it? (y/n): ").lower()
+            create = input(f"\nDirectory {destination} doesn’t exist. Create it? (y/n): ").lower()
             if create == 'y':
                 Path(destination).mkdir(parents=True, exist_ok=True)
             else:
